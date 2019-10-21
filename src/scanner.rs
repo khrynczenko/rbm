@@ -167,7 +167,6 @@ fn try_integer(stream: &mut CharacterStream) -> Option<Token> {
     scan(stream)
 }
 
-
 fn try_character(stream: &mut CharacterStream) -> Option<Token> {
     let scan = make_token_scanner(r#"^'.'"#, Category::Character);
     scan(stream)
