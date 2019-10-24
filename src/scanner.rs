@@ -35,6 +35,8 @@ pub enum Category {
     Pipe,
     Percent,
     Semicolon,
+    Dash,
+    Exclamation,
 }
 
 struct CharacterStream {
@@ -79,7 +81,7 @@ impl CharacterStream {
 pub fn tokenize(stream: &str) -> Result<Vec<Token>, ScanError> {
     let mut stream = CharacterStream::new(stream);
     let mut tokens = Vec::new();
-    let token_scanners: [fn(&mut CharacterStream) -> Option<Token>; 20] = [
+    let token_scanners: [fn(&mut CharacterStream) -> Option<Token>; 22] = [
         try_identifier,
         try_float,
         try_integer,
@@ -100,6 +102,8 @@ pub fn tokenize(stream: &str) -> Result<Vec<Token>, ScanError> {
         try_pipe,
         try_percent,
         try_semicolon,
+        try_exclamation,
+        try_dash,
     ];
     loop {
         if stream.get_remaining().starts_with(' ') || stream.get_remaining().starts_with('\n') {
@@ -252,13 +256,23 @@ fn try_semicolon(stream: &mut CharacterStream) -> Option<Token> {
     scan(stream)
 }
 
+fn try_exclamation(stream: &mut CharacterStream) -> Option<Token> {
+    let scan = make_token_scanner(r"^!", Category::Exclamation);
+    scan(stream)
+}
+
+fn try_dash(stream: &mut CharacterStream) -> Option<Token> {
+    let scan = make_token_scanner(r"^\^", Category::Dash);
+    scan(stream)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn tokenize_all_possible_tokens() {
-        let stream = r#"_identifier1 1.25 19 'c' "string" = + - / * ( ) [ ] < > & | % ;"#;
+        let stream = r#"_identifier1 1.25 19 'c' "string" = + - / * ( ) [ ] < > & | % ; ! ^"#;
         let identifier = Token {
             lexeme: String::from("_identifier1"),
             category: Category::Identifier,
@@ -393,6 +407,20 @@ mod tests {
             column: 63,
         };
 
+        let exclamation = Token {
+            lexeme: String::from("!"),
+            category: Category::Exclamation,
+            line: 1,
+            column: 65,
+        };
+
+        let dash = Token {
+            lexeme: String::from("^"),
+            category: Category::Dash,
+            line: 1,
+            column: 67,
+        };
+
         let tokens = tokenize(stream).unwrap();
         assert_eq!(tokens[0], identifier);
         assert_eq!(tokens[1], float);
@@ -414,5 +442,7 @@ mod tests {
         assert_eq!(tokens[17], pipe);
         assert_eq!(tokens[18], percent);
         assert_eq!(tokens[19], semicolon);
+        assert_eq!(tokens[20], exclamation);
+        assert_eq!(tokens[21], dash);
     }
 }

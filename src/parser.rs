@@ -18,7 +18,7 @@ impl TokenStream {
     pub fn take(&mut self) -> Option<Token> {
         let token = self.tokens.get(self.current_index)?;
         self.current_index += 1;
-        Some(*token)
+        Some(token.clone())
 
     }
     pub fn put_back(&mut self) {
@@ -58,40 +58,40 @@ fn parse_expression(stream: &[Token]) -> Result<(), ParseError> {
     Ok(())
 }
 
-fn parse_term(stream: &[Token])-> Result<(), ParseError> {
-    if stream.is_empty() {
-        return Err(ParseError::UnexpectedToken(Token{column: 1, line: 1, category: Category::Integer, lexeme: String::from("1")}));
-    }
-    let left_factor = parse_factor();
-    match token.category {
-        Category:: => Ok(()),
-        _ => Err(ParseError::UnexpectedToken(token.clone()))
-    }
-}
-
-fn parse_term_a(stream: &[Token])-> Result<(), ParseError> {
+fn parse_literal(stream: &[Token])-> Result<(), ParseError> {
     if stream.is_empty() {
         return Err(ParseError::UnexpectedToken(Token{column: 1, line: 1, category: Category::Integer, lexeme: String::from("1")}));
     }
     let token = stream.first().unwrap();
-    let operator = match token.category {
-        Category::Star => token,
-        Category::Slash => token,
+    match token.category {
+        Category::Float => token,
+        Category::Integer => token,
+        Category::Character => token,
+        Category::Text => token,
         _ => {return Err(ParseError::UnexpectedToken(token.clone()));},
     };
+    Ok(())
+
 }
 
-fn parse_factor(stream: &[Token]) -> Result<(), ParseError> {
+fn parse_identifier(stream: &[Token])-> Result<(), ParseError> {
     if stream.is_empty() {
         return Err(ParseError::UnexpectedToken(Token{column: 1, line: 1, category: Category::Integer, lexeme: String::from("1")}));
     }
     let token = stream.first().unwrap();
     match token.category {
-        Category::Integer => Ok(()),
-        Category::Float => Ok(()),
-        Category::Text => Ok(()),
-        Category::Character => Ok(()),
-        Category::Identifier => Ok(()),
-        _ => Err(ParseError::UnexpectedToken(token.clone()))
+        Category::Identifier => token,
+        _ => {return Err(ParseError::UnexpectedToken(token.clone()));},
+    };
+    Ok(())
+
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_correct_program() {
     }
 }
