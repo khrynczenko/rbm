@@ -1,3 +1,4 @@
+use std::fmt;
 use regex::Regex;
 
 #[derive(Debug)]
@@ -34,9 +35,23 @@ pub enum Category {
     Ampersand,
     Pipe,
     Percent,
+    Colon,
     Semicolon,
+    Comma,
     Dash,
     Exclamation,
+}
+
+impl fmt::Display for Category {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            category => write!(
+                f,
+                "{}",
+                category,
+            ),
+        }
+    }
 }
 
 struct CharacterStream {
@@ -81,7 +96,7 @@ impl CharacterStream {
 pub fn tokenize(stream: &str) -> Result<Vec<Token>, ScanError> {
     let mut stream = CharacterStream::new(stream);
     let mut tokens = Vec::new();
-    let token_scanners: [fn(&mut CharacterStream) -> Option<Token>; 22] = [
+    let token_scanners: [fn(&mut CharacterStream) -> Option<Token>; 24] = [
         try_identifier,
         try_float,
         try_integer,
@@ -101,7 +116,9 @@ pub fn tokenize(stream: &str) -> Result<Vec<Token>, ScanError> {
         try_ampersand,
         try_pipe,
         try_percent,
+        try_colon,
         try_semicolon,
+        try_comma,
         try_exclamation,
         try_dash,
     ];
@@ -251,8 +268,18 @@ fn try_percent(stream: &mut CharacterStream) -> Option<Token> {
     scan(stream)
 }
 
+fn try_colon(stream: &mut CharacterStream) -> Option<Token> {
+    let scan = make_token_scanner(r"^:", Category::Colon);
+    scan(stream)
+}
+
 fn try_semicolon(stream: &mut CharacterStream) -> Option<Token> {
     let scan = make_token_scanner(r"^;", Category::Semicolon);
+    scan(stream)
+}
+
+fn try_comma(stream: &mut CharacterStream) -> Option<Token> {
+    let scan = make_token_scanner(r"^,", Category::Comma);
     scan(stream)
 }
 
@@ -272,7 +299,7 @@ mod tests {
 
     #[test]
     fn tokenize_all_possible_tokens() {
-        let stream = r#"_identifier1 1.25 19 'c' "string" = + - / * ( ) [ ] < > & | % ; ! ^"#;
+        let stream = r#"_identifier1 1.25 19 'c' "string" = + - / * ( ) [ ] < > & | % : ; , ! ^"#;
         let identifier = Token {
             lexeme: String::from("_identifier1"),
             category: Category::Identifier,
@@ -400,25 +427,39 @@ mod tests {
             column: 61,
         };
 
+        let colon = Token {
+            lexeme: String::from(":"),
+            category: Category::Colon,
+            line: 1,
+            column: 63,
+        };
+
         let semicolon = Token {
             lexeme: String::from(";"),
             category: Category::Semicolon,
             line: 1,
-            column: 63,
+            column: 65,
+        };
+
+        let comma = Token {
+            lexeme: String::from(","),
+            category: Category::Comma,
+            line: 1,
+            column: 67,
         };
 
         let exclamation = Token {
             lexeme: String::from("!"),
             category: Category::Exclamation,
             line: 1,
-            column: 65,
+            column: 69,
         };
 
         let dash = Token {
             lexeme: String::from("^"),
             category: Category::Dash,
             line: 1,
-            column: 67,
+            column: 71,
         };
 
         let tokens = tokenize(stream).unwrap();
@@ -441,8 +482,10 @@ mod tests {
         assert_eq!(tokens[16], ampersand);
         assert_eq!(tokens[17], pipe);
         assert_eq!(tokens[18], percent);
-        assert_eq!(tokens[19], semicolon);
-        assert_eq!(tokens[20], exclamation);
-        assert_eq!(tokens[21], dash);
+        assert_eq!(tokens[19], colon);
+        assert_eq!(tokens[20], semicolon);
+        assert_eq!(tokens[21], comma);
+        assert_eq!(tokens[22], exclamation);
+        assert_eq!(tokens[23], dash);
     }
 }
