@@ -4,6 +4,7 @@ use regex::Regex;
 #[derive(Debug)]
 pub enum ScanError {
     CannotScanToken { line: usize, column: usize },
+    UnclosedMultiLineComment {line: usize, column: usize},
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -16,9 +17,16 @@ pub struct Token {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Category {
+    FunctionKeyword,
+    ForKeyword,
+    IfKeyword,
+    ElseKeyword,
+    ReturnKeyword,
+    PrintKeyword,
     Identifier,
     Float,
     Integer,
+    Boolean,
     Character,
     Text,
     Equal,
@@ -26,6 +34,8 @@ pub enum Category {
     Minus,
     Slash,
     Star,
+    OpenBrace,
+    CloseBrace,
     OpenParen,
     CloseParen,
     OpenBracket,
@@ -41,6 +51,7 @@ pub enum Category {
     Dash,
     Exclamation,
 }
+
 
 impl fmt::Display for Category {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -93,10 +104,13 @@ impl CharacterStream {
     }
 }
 
-pub fn tokenize(stream: &str) -> Result<Vec<Token>, ScanError> {
-    let mut stream = CharacterStream::new(stream);
-    let mut tokens = Vec::new();
-    let token_scanners: [fn(&mut CharacterStream) -> Option<Token>; 24] = [
+const SCAN_FUNCTIONS: [fn(&mut CharacterStream) -> Option<Token>; 32] = [
+        try_function_keyword,
+        try_for_keyword,
+        try_if_keyword,
+        try_else_keyword,
+        try_return_keyword,
+        try_print_keyword,
         try_identifier,
         try_float,
         try_integer,
@@ -111,6 +125,8 @@ pub fn tokenize(stream: &str) -> Result<Vec<Token>, ScanError> {
         try_close_paren,
         try_open_bracket,
         try_close_bracket,
+        try_open_brace,
+        try_close_brace,
         try_less,
         try_more,
         try_ampersand,
@@ -122,13 +138,44 @@ pub fn tokenize(stream: &str) -> Result<Vec<Token>, ScanError> {
         try_exclamation,
         try_dash,
     ];
+
+
+pub fn tokenize(stream: &str) -> Result<Vec<Token>, ScanError> {
+    let mut stream = CharacterStream::new(stream);
+    let mut tokens = Vec::new();
     loop {
-        if stream.get_remaining().starts_with(' ') || stream.get_remaining().starts_with('\n') {
+        // Checking for whitespace
+        if stream.get_remaining().starts_with(' ') 
+            || stream.get_remaining().starts_with('\n')
+            || stream.get_remaining().starts_with('\t') {
             stream.consume(1);
             continue;
         }
+        // Checking for single-line comments
+        if stream.get_remaining().starts_with("//") {
+            stream.consume(2);
+            while !stream.get_remaining().starts_with("\n") {
+                stream.consume(1);
+            }
+            stream.consume(1);
+            continue;
+        }
+        // Checking for multi-line comments
+        if stream.get_remaining().starts_with("/*") {
+            let line = stream.current_line;
+            let column = stream.current_column;
+            stream.consume(2);
+            while !stream.get_remaining().starts_with("*/") {
+                if stream.get_remaining().len() == 0 {
+                    return Err(ScanError::UnclosedMultiLineComment{line, column});
+                }
+                stream.consume(1);
+            }
+            stream.consume(2);
+            continue;
+        }
         let mut scanned = false;
-        for scanner in &token_scanners {
+        for scanner in &SCAN_FUNCTIONS[..] {
             match scanner(&mut stream) {
                 Some(token) => {
                     tokens.push(token);
@@ -173,6 +220,32 @@ fn make_token_scanner(
     }
 }
 
+fn try_function_keyword(stream: &mut CharacterStream) -> Option<Token> {
+    let scan = make_token_scanner(r"^function", Category::FunctionKeyword);
+    scan(stream)
+}
+fn try_for_keyword(stream: &mut CharacterStream) -> Option<Token> {
+    let scan = make_token_scanner(r"^for", Category::ForKeyword);
+    scan(stream)
+}
+
+fn try_if_keyword(stream: &mut CharacterStream) -> Option<Token> {
+    let scan = make_token_scanner(r"^if", Category::IfKeyword);
+    scan(stream)
+}
+fn try_else_keyword(stream: &mut CharacterStream) -> Option<Token> {
+    let scan = make_token_scanner(r"^else", Category::ElseKeyword);
+    scan(stream)
+}
+fn try_return_keyword(stream: &mut CharacterStream) -> Option<Token> {
+    let scan = make_token_scanner(r"^return", Category::ReturnKeyword);
+    scan(stream)
+}
+fn try_print_keyword(stream: &mut CharacterStream) -> Option<Token> {
+    let scan = make_token_scanner(r"^print", Category::PrintKeyword);
+    scan(stream)
+}
+
 fn try_identifier(stream: &mut CharacterStream) -> Option<Token> {
     let scan = make_token_scanner(r"^[a-zA-Z_][a-zA-Z0-9_]*", Category::Identifier);
     scan(stream)
@@ -189,12 +262,12 @@ fn try_integer(stream: &mut CharacterStream) -> Option<Token> {
 }
 
 fn try_character(stream: &mut CharacterStream) -> Option<Token> {
-    let scan = make_token_scanner(r#"^'.'"#, Category::Character);
+    let scan = make_token_scanner(r#"^'(\\)?[[:alpha:][0-9]]'"#, Category::Character);
     scan(stream)
 }
 
 fn try_text(stream: &mut CharacterStream) -> Option<Token> {
-    let scan = make_token_scanner(r#"^".*""#, Category::Text);
+    let scan = make_token_scanner(r#"^(?-m)("((\\.)|[^"\n])*")"#, Category::Text);
     scan(stream)
 }
 
@@ -240,6 +313,16 @@ fn try_open_bracket(stream: &mut CharacterStream) -> Option<Token> {
 
 fn try_close_bracket(stream: &mut CharacterStream) -> Option<Token> {
     let scan = make_token_scanner(r"^\]", Category::CloseBracket);
+    scan(stream)
+}
+
+fn try_open_brace(stream: &mut CharacterStream) -> Option<Token> {
+    let scan = make_token_scanner(r"^\{", Category::OpenBrace);
+    scan(stream)
+}
+
+fn try_close_brace(stream: &mut CharacterStream) -> Option<Token> {
+    let scan = make_token_scanner(r"^\}", Category::CloseBrace);
     scan(stream)
 }
 
@@ -299,7 +382,7 @@ mod tests {
 
     #[test]
     fn tokenize_all_possible_tokens() {
-        let stream = r#"_identifier1 1.25 19 'c' "string" = + - / * ( ) [ ] < > & | % : ; , ! ^"#;
+        let stream = r#"_identifier1 1.25 19 'c' "string" = + - / * ( ) [ ] < > & | % : ; , ! ^ function for if else return print { }"#;
         let identifier = Token {
             lexeme: String::from("_identifier1"),
             category: Category::Identifier,
@@ -462,6 +545,62 @@ mod tests {
             column: 71,
         };
 
+        let function_keyword = Token {
+            lexeme: String::from("function"),
+            category: Category::FunctionKeyword,
+            line: 1,
+            column: 73,
+        };
+
+        let for_keyword = Token {
+            lexeme: String::from("for"),
+            category: Category::ForKeyword,
+            line: 1,
+            column: 82,
+        };
+
+        let if_keyword = Token {
+            lexeme: String::from("if"),
+            category: Category::IfKeyword,
+            line: 1,
+            column: 86,
+        };
+
+        let else_keyword = Token {
+            lexeme: String::from("else"),
+            category: Category::ElseKeyword,
+            line: 1,
+            column: 89,
+        };
+
+        let return_keyword = Token {
+            lexeme: String::from("return"),
+            category: Category::ReturnKeyword,
+            line: 1,
+            column: 94,
+        };
+
+        let print_keyword = Token {
+            lexeme: String::from("print"),
+            category: Category::PrintKeyword,
+            line: 1,
+            column: 101,
+        };
+
+        let open_brace = Token {
+            lexeme: String::from("{"),
+            category: Category::OpenBrace,
+            line: 1,
+            column: 107,
+        };
+
+        let close_brace = Token {
+            lexeme: String::from("}"),
+            category: Category::CloseBrace,
+            line: 1,
+            column: 109,
+        };
+
         let tokens = tokenize(stream).unwrap();
         assert_eq!(tokens[0], identifier);
         assert_eq!(tokens[1], float);
@@ -487,5 +626,13 @@ mod tests {
         assert_eq!(tokens[21], comma);
         assert_eq!(tokens[22], exclamation);
         assert_eq!(tokens[23], dash);
+        assert_eq!(tokens[24], function_keyword);
+        assert_eq!(tokens[25], for_keyword);
+        assert_eq!(tokens[26], if_keyword);
+        assert_eq!(tokens[27], else_keyword);
+        assert_eq!(tokens[28], return_keyword);
+        assert_eq!(tokens[29], print_keyword);
+        assert_eq!(tokens[30], open_brace);
+        assert_eq!(tokens[31], close_brace);
     }
 }
