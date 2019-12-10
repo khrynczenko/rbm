@@ -12,7 +12,11 @@ fn test_parsing_good() {
         let tokens = scanner::tokenize(content.as_str()).unwrap();
         println!("tokenized");
         let ast = parser::parse(&tokens);
-        assert!(ast.is_ok());
+        let b = ast.is_ok();
+        if ast.is_err() {
+            println!("{:?}", ast.unwrap_err());
+        }
+        assert!(b)
     }
 }
 

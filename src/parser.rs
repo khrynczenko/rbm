@@ -19,7 +19,7 @@ impl TokenStream {
     pub fn take(&mut self) -> Option<Token> {
         let token = self.tokens.get(self.current_index)?;
         self.current_index += 1;
-        println!("{:?}", self);
+        //println!("{:?}", self);
         Some(token.clone())
     }
 
@@ -85,7 +85,10 @@ fn parse_token(categories: &'static[Category], stream: &mut TokenStream) -> Resu
     Ok(token)
 }
 
-fn parse(tokens: &[Token]) -> Result<(), ParseError> {
+pub fn parse(tokens: &[Token]) -> Result<(), ParseError> {
+    if tokens.is_empty() {
+        return Ok(());
+    }
     let mut token_stream = TokenStream::new(tokens);
     parse_program(&mut token_stream)
 }
@@ -107,18 +110,140 @@ fn parse_program(stream: &mut TokenStream) -> Result<(), ParseError> {
 
 
 fn parse_declaration(stream: &mut TokenStream) -> Result<(), ParseError> {
+    println!("PARSE_DECLARATION");
+    parse_declaration_beginning(stream)?;
+    parse_declaration_rest(stream)?;
+    Ok(())
+}
+
+fn parse_declaration_beginning(stream: &mut TokenStream) -> Result<(), ParseError> {
     let name_identifier = parse_token(&[Category::Identifier], stream)?;
-    println!("PARSED IDENTIFIER");
     let colon = parse_token(&[Category::Colon], stream)?;
-    println!("PARSED COLOn");
-    let type_identifier = parse_token(&[Category::Identifier], stream)?;
-    println!("PARSED IDENTIFIER");
-    let equal = parse_token(&[Category::Equal], stream)?;
-    println!("PARSED EQUAL");
-    let expression = parse_expression(stream)?;
-    println!("PARSED EXPRESSION");
-    let semicolon = parse_token(&[Category::Semicolon], stream)?;
-    println!("PARSED SEMICOLON");
+    Ok(())
+}
+
+fn parse_declaration_rest(stream: &mut TokenStream) -> Result<(), ParseError> {
+    if parse_token(&[Category::Identifier], stream).is_ok() {
+        // decleration of an variable
+        if parse_token(&[Category::Semicolon], stream).is_ok() {
+            println!("PARSING IDENTFIER SEMICOLON");
+        } else {
+            println!("PARSING IDENTFIER TOKEN START");
+            parse_token(&[Category::Equal], stream)?;
+            parse_expression(stream)?;
+            parse_token(&[Category::Semicolon], stream)?;
+            println!("PARSING IDENTFIER TOKEN END");
+        }
+    } else if parse_token(&[Category::ArrayKeyword], stream).is_ok() {
+        println!("PARSING ARRAY");
+        // decleration of an array
+        parse_token(&[Category::Identifier], stream)?;
+        parse_token(&[Category::Identifier], stream)?;
+        parse_token(&[Category::Identifier], stream)?;
+    } else if parse_token(&[Category::FunctionKeyword], stream).is_ok() {
+        // declaration of a function
+        println!("PARSING FUNCTION");
+        parse_token(&[Category::Identifier], stream)?;
+        parse_token(&[Category::OpenParen], stream)?;
+        parse_function_parameters(stream)?;
+        parse_token(&[Category::CloseParen], stream)?;
+        parse_token(&[Category::Equal], stream)?;
+        parse_block_statement(stream)?;
+    } else {
+        let expected = &[Category::Identifier, Category::ArrayKeyword, Category::FunctionKeyword, Category::Semicolon];
+        if stream.how_many_are_remaining() == 0 { 
+            stream.put_back();
+            let after = stream.take().unwrap();
+            return Err(ParseError::ExpectedButMissingToken{after, expected});
+        }
+        let unexpected = stream.take().unwrap();
+        return Err(ParseError::UnexpectedToken{expected, unexpected});
+    }
+    Ok(())
+}
+
+
+fn parse_statement(stream: &mut TokenStream ) -> Result<(), ParseError> {
+    if parse_assignment_statement(stream).is_ok() {
+        println!("s_assignmnent");
+    } else if parse_declaration(stream).is_ok() {
+        println!("s_declaration");
+        let i = stream.take().unwrap().line;
+        stream.put_back();
+        println!("{}", i);
+    } else if parse_if_else_statement(stream).is_ok() {
+        println!("s_if_else");
+    } else if parse_for_statement(stream).is_ok(){
+        println!("s_for");
+    } else if parse_return_statement(stream).is_ok(){
+        println!("s_return");
+    } else if parse_print_statement(stream).is_ok(){
+        println!("s_print");
+    } else if parse_expression(stream).is_ok() {
+        println!("s_epression");
+    } else {
+        let expected = &[Category::IfKeyword, Category::ForKeyword, Category::Identifier, Category::PrintKeyword, Category::ReturnKeyword];
+        let unexpected = stream.take().unwrap();
+        return Err(ParseError::UnexpectedToken{expected, unexpected});
+    }
+    Ok(())
+}
+
+fn parse_assignment_statement(stream: &mut TokenStream ) -> Result<(), ParseError> {
+        parse_token(&[Category::Identifier], stream)?;
+        parse_token(&[Category::Equal], stream)?;
+        parse_expression(stream)?;
+        parse_token(&[Category::Semicolon], stream)?;
+        Ok(())
+}
+
+fn parse_if_else_statement(stream: &mut TokenStream ) -> Result<(), ParseError> {
+        parse_token(&[Category::IfKeyword], stream)?;
+        parse_token(&[Category::OpenParen], stream)?;
+        parse_expression(stream)?;
+        parse_token(&[Category::CloseParen], stream)?;
+        parse_block_statement(stream)?;
+        parse_token(&[Category::ElseKeyword], stream)?;
+        parse_block_statement(stream)?;
+        Ok(())
+}
+
+fn parse_for_statement(stream: &mut TokenStream ) -> Result<(), ParseError> {
+        parse_token(&[Category::ForKeyword], stream)?;
+        parse_token(&[Category::OpenParen], stream)?;
+        parse_expression(stream)?;
+        parse_token(&[Category::Semicolon], stream)?;
+        parse_expression(stream)?;
+        parse_token(&[Category::Semicolon], stream)?;
+        parse_expression(stream)?;
+        parse_token(&[Category::CloseParen], stream)?;
+        parse_block_statement(stream)?;
+        Ok(())
+}
+
+fn parse_return_statement(stream: &mut TokenStream ) -> Result<(), ParseError> {
+        parse_token(&[Category::ReturnKeyword], stream)?;
+        parse_expression(stream)?;
+        Ok(())
+}
+
+fn parse_print_statement(stream: &mut TokenStream ) -> Result<(), ParseError> {
+    parse_token(&[Category::PrintKeyword], stream)?;
+    parse_expression(stream)?;
+    Ok(())
+}
+
+fn parse_block_statement(stream: &mut TokenStream ) -> Result<(), ParseError> {
+    parse_token(&[Category::OpenBrace], stream)?;
+    loop {
+        if parse_token(&[Category::CloseBrace], stream).is_ok() {
+            break;
+        }
+        let x = parse_statement(stream)?;
+        let mut s = String::new();
+        let stdi = std::io::stdin();
+        stdi.read_line(&mut s);
+    }
     Ok(())
 }
 
@@ -130,13 +255,11 @@ fn parse_expression(stream: &mut TokenStream ) -> Result<(), ParseError> {
 
 
 fn parse_logical(stream: &mut TokenStream ) -> Result<(), ParseError> {
-    //parse_token(Category::Identifier, stream).map( |x| {Ok(())})?
     parse_comparison(stream)?;
     parse_logical_a(stream)
 }
 
 fn parse_logical_a(stream: &mut TokenStream ) -> Result<(), ParseError> {
-    //parse_token(Category::Identifier, stream).map( |x| {Ok(())})?
     if parse_token(&[Category::Pipe], stream).is_ok(){
         parse_token(&[Category::Pipe], stream)?;
         parse_comparison(stream)?;
@@ -165,7 +288,6 @@ fn parse_comparison_a(stream: &mut TokenStream ) -> Result<(), ParseError> {
         parse_token(&[Category::Equal], stream)?;
         parse_arithmetical_add_sub(stream)?;
         parse_comparison_a(stream)?;
-
     } else if parse_token(&[Category::Exclamation], stream).is_ok() {
         parse_token(&[Category::Equal], stream)?;
         parse_arithmetical_add_sub(stream)?;
@@ -271,14 +393,21 @@ fn parse_unary_a(stream: &mut TokenStream ) -> Result<(), ParseError> {
 }
 
 fn parse_postfix(stream: &mut TokenStream ) -> Result<(), ParseError> {
-    if parse_subscript(stream).is_ok(){
-        parse_postfix_a(stream)?;
-    } else if parse_function_call(stream).is_ok() {
+    if parse_token(&[Category::Identifier], stream).is_ok(){
+        if parse_subscript(stream).is_ok() {
+        } else if parse_function_call(stream).is_ok() {
+        } else {
+        }
         parse_postfix_a(stream)?;
     } else if parse_literal(stream).is_ok() {
         parse_postfix_a(stream)?;
-    } else if parse_token(&[Category::Identifier], stream).is_ok() {
-        parse_postfix_a(stream)?;
+    } else {
+        let expected = &[Category::Identifier];
+        if stream.how_many_are_remaining() == 0 {
+            stream.put_back();
+        }
+        let unexpected = stream.take().unwrap();
+        return Err(ParseError::UnexpectedToken{expected, unexpected});
     }
     Ok(())
 }
@@ -293,7 +422,6 @@ fn parse_postfix_a(stream: &mut TokenStream ) -> Result<(), ParseError> {
 }
 
 fn parse_subscript(stream: &mut TokenStream ) -> Result<(), ParseError> {
-    parse_token(&[Category::Identifier], stream)?;
     parse_token(&[Category::OpenBracket], stream)?;
     parse_expression(stream)?;
     parse_token(&[Category::CloseBracket], stream)?;
@@ -301,7 +429,6 @@ fn parse_subscript(stream: &mut TokenStream ) -> Result<(), ParseError> {
 }
 
 fn parse_function_call(stream: &mut TokenStream ) -> Result<(), ParseError> {
-    parse_token(&[Category::Identifier], stream)?;
     parse_token(&[Category::OpenParen], stream)?;
     parse_function_parameters(stream)?;
     parse_token(&[Category::CloseParen], stream)?;
@@ -310,19 +437,26 @@ fn parse_function_call(stream: &mut TokenStream ) -> Result<(), ParseError> {
 
 fn parse_function_parameters(stream: &mut TokenStream ) -> Result<(), ParseError> {
     loop {
-        if parse_expression(stream).is_err() {
+        if stream.take().unwrap().category == Category::CloseParen {
+            stream.put_back();
             break;
         } else {
-            parse_token(&[Category::Comma], stream)?;
+            stream.put_back();
+        }
+        parse_token(&[Category::Identifier], stream)?;
+        parse_token(&[Category::Colon], stream)?;
+        parse_token(&[Category::Identifier], stream)?;
+        if parse_token(&[Category::Comma], stream).is_ok() {
+        } else {
+            break;
         }
     }
     Ok(())
 }
 
 fn parse_literal(stream: &mut TokenStream)-> Result<(), ParseError> {
-    let token = parse_token(&[Category::Float, Category::Integer, Category::Character, Category::Text], stream)?;
+    parse_token(&[Category::Float, Category::Integer, Category::Character, Category::Text], stream)?;
     Ok(())
-
 }
 
 

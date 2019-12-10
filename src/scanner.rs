@@ -17,6 +17,7 @@ pub struct Token {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Category {
+    ArrayKeyword,
     FunctionKeyword,
     ForKeyword,
     IfKeyword,
@@ -90,6 +91,9 @@ impl CharacterStream {
                     current_line += 1;
                     current_column = 1;
                 }
+                '\t' => {
+                    current_column += 4;
+                }
                 _ => {
                     current_column += 1;
                 }
@@ -104,7 +108,8 @@ impl CharacterStream {
     }
 }
 
-const SCAN_FUNCTIONS: [fn(&mut CharacterStream) -> Option<Token>; 32] = [
+const SCAN_FUNCTIONS: [fn(&mut CharacterStream) -> Option<Token>; 33] = [
+        try_array_keyword,
         try_function_keyword,
         try_for_keyword,
         try_if_keyword,
@@ -220,6 +225,10 @@ fn make_token_scanner(
     }
 }
 
+fn try_array_keyword(stream: &mut CharacterStream) -> Option<Token> {
+    let scan = make_token_scanner(r"^array", Category::ArrayKeyword);
+    scan(stream)
+}
 fn try_function_keyword(stream: &mut CharacterStream) -> Option<Token> {
     let scan = make_token_scanner(r"^function", Category::FunctionKeyword);
     scan(stream)
@@ -322,7 +331,7 @@ fn try_open_brace(stream: &mut CharacterStream) -> Option<Token> {
 }
 
 fn try_close_brace(stream: &mut CharacterStream) -> Option<Token> {
-    let scan = make_token_scanner(r"^\}", Category::CloseBrace);
+    let scan = make_token_scanner(r"^}", Category::CloseBrace);
     scan(stream)
 }
 
@@ -382,7 +391,7 @@ mod tests {
 
     #[test]
     fn tokenize_all_possible_tokens() {
-        let stream = r#"_identifier1 1.25 19 'c' "string" = + - / * ( ) [ ] < > & | % : ; , ! ^ function for if else return print { }"#;
+        let stream = r#"_identifier1 1.25 19 'c' "string" = + - / * ( ) [ ] < > & | % : ; , ! ^ function for if else return print { } array"#;
         let identifier = Token {
             lexeme: String::from("_identifier1"),
             category: Category::Identifier,
@@ -601,6 +610,13 @@ mod tests {
             column: 109,
         };
 
+        let array_keyword = Token {
+            lexeme: String::from("array"),
+            category: Category::ArrayKeyword,
+            line: 1,
+            column: 111,
+        };
+
         let tokens = tokenize(stream).unwrap();
         assert_eq!(tokens[0], identifier);
         assert_eq!(tokens[1], float);
@@ -634,5 +650,6 @@ mod tests {
         assert_eq!(tokens[29], print_keyword);
         assert_eq!(tokens[30], open_brace);
         assert_eq!(tokens[31], close_brace);
+        assert_eq!(tokens[32], array_keyword);
     }
 }
