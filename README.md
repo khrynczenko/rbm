@@ -42,6 +42,6 @@ For more details run
 - [x] lexical analysis
 - [x] syntactic analysis
 - [x] AST generation
-- [] semantic analysis
-- [] optimization
-- [] code generation
+- [ ] semantic analysis
+- [ ] optimization
+- [ ] code generation
