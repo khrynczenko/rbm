@@ -1,10 +1,10 @@
-use std::fmt;
 use regex::Regex;
+use std::fmt;
 
 #[derive(Debug)]
 pub enum ScanError {
     CannotScanToken { line: usize, column: usize },
-    UnclosedMultiLineComment {line: usize, column: usize},
+    UnclosedMultiLineComment { line: usize, column: usize },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -53,15 +53,10 @@ pub enum Category {
     Exclamation,
 }
 
-
 impl fmt::Display for Category {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            category => write!(
-                f,
-                "{}",
-                category,
-            ),
+            category => write!(f, "{}", category,),
         }
     }
 }
@@ -109,50 +104,51 @@ impl CharacterStream {
 }
 
 const SCAN_FUNCTIONS: [fn(&mut CharacterStream) -> Option<Token>; 33] = [
-        try_array_keyword,
-        try_function_keyword,
-        try_for_keyword,
-        try_if_keyword,
-        try_else_keyword,
-        try_return_keyword,
-        try_print_keyword,
-        try_identifier,
-        try_float,
-        try_integer,
-        try_character,
-        try_text,
-        try_equal,
-        try_plus,
-        try_minus,
-        try_slash,
-        try_star,
-        try_open_paren,
-        try_close_paren,
-        try_open_bracket,
-        try_close_bracket,
-        try_open_brace,
-        try_close_brace,
-        try_less,
-        try_more,
-        try_ampersand,
-        try_pipe,
-        try_percent,
-        try_colon,
-        try_semicolon,
-        try_comma,
-        try_exclamation,
-        try_dash,
-    ];
-
+    try_array_keyword,
+    try_function_keyword,
+    try_for_keyword,
+    try_if_keyword,
+    try_else_keyword,
+    try_return_keyword,
+    try_print_keyword,
+    try_identifier,
+    try_float,
+    try_integer,
+    try_character,
+    try_text,
+    try_equal,
+    try_plus,
+    try_minus,
+    try_slash,
+    try_star,
+    try_open_paren,
+    try_close_paren,
+    try_open_bracket,
+    try_close_bracket,
+    try_open_brace,
+    try_close_brace,
+    try_less,
+    try_more,
+    try_ampersand,
+    try_pipe,
+    try_percent,
+    try_colon,
+    try_semicolon,
+    try_comma,
+    try_exclamation,
+    try_dash,
+];
 
 pub fn tokenize(stream: &str) -> Result<Vec<Token>, ScanError> {
     let mut stream = CharacterStream::new(stream);
     let mut tokens = Vec::new();
     loop {
         // Checking for whitespace
-        if stream.get_remaining().starts_with(' ') 
+        if stream.get_remaining().starts_with(' ')
             || stream.get_remaining().starts_with('\n')
-            || stream.get_remaining().starts_with('\t') {
+            || stream.get_remaining().starts_with("\r\n")
+            || stream.get_remaining().starts_with('\t')
+        {
             stream.consume(1);
             continue;
         }
@@ -172,7 +168,7 @@ pub fn tokenize(stream: &str) -> Result<Vec<Token>, ScanError> {
             stream.consume(2);
             while !stream.get_remaining().starts_with("*/") {
                 if stream.get_remaining().len() == 0 {
-                    return Err(ScanError::UnclosedMultiLineComment{line, column});
+                    return Err(ScanError::UnclosedMultiLineComment { line, column });
                 }
                 stream.consume(1);
             }
@@ -383,6 +379,14 @@ fn try_exclamation(stream: &mut CharacterStream) -> Option<Token> {
 fn try_dash(stream: &mut CharacterStream) -> Option<Token> {
     let scan = make_token_scanner(r"^\^", Category::Dash);
     scan(stream)
+}
+
+pub fn print_pretty(tokens: &[Token]) {
+    println!("{:4} {:3} {:20} {:15}", "Line", "Col", "Lexeme", "Category");
+    for token in tokens {
+        //println!("{} {} {}", token.line, token.column, token.lexeme);
+        println!("{:4} {:3} {:20} {:15?}", token.line, token.column, token.lexeme, token.category);
+    }
 }
 
 #[cfg(test)]

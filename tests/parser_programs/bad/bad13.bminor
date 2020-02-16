@@ -3,6 +3,3 @@ x:integer = 6;
 fxn:function void() =
 {
 	integer= 5; 
-	
-	
-}
